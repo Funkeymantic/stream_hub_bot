@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bot Logs</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.5.4/socket.io.js"></script>
+</head>
+<body>
+    <h2>Real-time Bot Logs</h2>
+    <div id="log-container" style="height: 400px; overflow-y: scroll; background: #000; color: #fff; padding: 10px;">
+    </div>
+    <script>
+        var socket = io.connect('http://' + document.domain + ':' + location.port);
+        socket.on('log_update', function(data) {
+            var logContainer = document.getElementById('log-container');
+            logContainer.innerHTML += '<p>' + data.log + '</p>';
+            logContainer.scrollTop = logContainer.scrollHeight;
+        });
+    </script>
+</body>
+</html>

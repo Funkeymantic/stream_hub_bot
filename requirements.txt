@@ -1,0 +1,8 @@
+discord.py
+asyncpg
+psycopg2
+sqlalchemy
+aiosqlite
+flask
+flask-socketio
+eventlet
