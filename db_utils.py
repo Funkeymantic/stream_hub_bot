@@ -1,6 +1,6 @@
 from database import SessionLocal
 from models import House, Key
-from sqlalchemy.future import select
+from sqlalchemy.future import select, delete
 
 async def add_house(name, owner_id, text_channel_id, voice_channel_id):
     async with SessionLocal() as session:
@@ -21,5 +21,5 @@ async def add_key(house_id, user_id, role_id):
 
 async def remove_key(user_id):
     async with SessionLocal() as session:
-        await session.execute(select(Key).filter(Key.user_id == user_id).delete())
+        await session.execute(delete(Key).where(Key.user_id == user_id))
         await session.commit()

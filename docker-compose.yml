@@ -18,3 +18,9 @@ services:
     command: ["python", "dashboard.py"]
     ports:
       - "5000:5000"
+
+  # healthcheck:
+  #   test: ["CMD", "python", "health_check.py"]
+  #   interval: 30s
+  #   timeout: 10s
+  #   retries: 3

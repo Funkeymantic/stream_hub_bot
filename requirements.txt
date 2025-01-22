@@ -1,8 +1,12 @@
 discord.py
 asyncpg
-psycopg2
+psycopg2-binary
 sqlalchemy
 aiosqlite
 flask
 flask-socketio
 eventlet
+google-api-python-client
+tweepy
+twitchio
+pynacl

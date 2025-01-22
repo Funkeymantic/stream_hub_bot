@@ -1,69 +1,46 @@
 import discord
 from discord.ext import commands
-from db_utils import add_house, get_house_by_name, add_key, remove_key
+from utils.discord_helpers import to_fancy_font
 
-class OfficeChannels(commands.Cog):
+class OfficeManagement(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
 
-    @commands.command(name="create_house")
-@commands.has_permissions(administrator=True)
-async def create_house(self, ctx, house_name: str, member: discord.Member):
-    """Creates a house (text and voice channels) for the given user."""
-    existing_house = await get_house_by_name(house_name)
-    if existing_house:
-        await ctx.send(f"⚠️ A house named `{house_name}` already exists!")
-        return
+    @commands.command()
+    async def createhouse(self, ctx, house_name: str, member: discord.Member):
+        guild = ctx.guild
 
-    guild = ctx.guild
-    category = discord.utils.get(guild.categories, name="Houses") or await guild.create_category("Houses")
+        # Convert house name to fancy font
+        fancy_house_name = to_fancy_font(house_name)
 
-    # Error handling for permission issues
-    try:
-        text_channel = await category.create_text_channel(house_name)
-        voice_channel = await category.create_voice_channel(house_name)
-        role_name = f"{house_name} 🔑"
-        role = await guild.create_role(name=role_name)
-        await member.add_roles(role)
+        # Use self.bot.config to get configuration values
+        category_id = self.bot.config['office_channels']['category_id']
 
-        await text_channel.set_permissions(role, read_messages=True, send_messages=True)
-        await voice_channel.set_permissions(role, connect=True, speak=True)
+        # Check if category exists using ID
+        category = discord.utils.get(guild.categories, id=category_id)
+        if not category:
+            return await ctx.send("⚠️ Category not found. Please configure the correct ID in the bot config.")
 
-        await add_house(house_name, member.id, text_channel.id, voice_channel.id)
-        await ctx.send(f"🏠 House `{house_name}` created successfully for {member.mention}.")
-    except discord.Forbidden:
-        await ctx.send("⚠️ I do not have permission to create channels or roles. Please check my role permissions.")
+        # Create voice channel with fancy font name
+        voice_channel = await guild.create_voice_channel(fancy_house_name, category=category)
 
+        # Create a role with fancy font
+        fancy_role_name = to_fancy_font(f"{house_name} Key")
+        office_role = await guild.create_role(name=fancy_role_name)
 
-    @commands.command(name="give_key")
-    async def give_key(self, ctx, member: discord.Member):
-        """Gives the specified user access to the current house."""
-        house = await get_house_by_name(ctx.channel.name)
-        if house:
-            role = discord.utils.get(ctx.guild.roles, name=f"{house.name} 🔑")
-            if role:
-                await member.add_roles(role)
-                await add_key(house.id, member.id, role.id)
-                await ctx.send(f"🔑 {member.mention} now has access to `{house.name}`.")
-            else:
-                await ctx.send("⚠️ Role not found. Please check the house name.")
-        else:
-            await ctx.send("⚠️ No house associated with this channel.")
+        # Assign the role to the mentioned user
+        await member.add_roles(office_role)
+        
+        # Set channel permissions using role and channel IDs
+        await voice_channel.set_permissions(member, overwrite=discord.PermissionOverwrite(manage_channels=True, view_channel=True, connect=True, speak=True))
+        await voice_channel.set_permissions(guild.default_role, overwrite=discord.PermissionOverwrite(view_channel=False, connect=False))
 
-    @commands.command(name="take_key")
-    async def take_key(self, ctx, member: discord.Member):
-        """Removes the specified user's access from the current house."""
-        house = await get_house_by_name(ctx.channel.name)
-        if house:
-            role = discord.utils.get(ctx.guild.roles, name=f"{house.name} 🔑")
-            if role and role in member.roles:
-                await member.remove_roles(role)
-                await remove_key(member.id)
-                await ctx.send(f"🔐 {member.mention} no longer has access to `{house.name}`.")
-            else:
-                await ctx.send("⚠️ User does not have access to this house.")
-        else:
-            await ctx.send("⚠️ No house associated with this channel.")
+        mod_role_id = self.bot.config['office_channels']['mod_role_id']
+        mod_role = guild.get_role(mod_role_id)
+        if mod_role:
+            await voice_channel.set_permissions(mod_role, overwrite=discord.PermissionOverwrite(manage_channels=True, view_channel=True))
+
+        await ctx.send(f"🏠 House `{fancy_house_name}` has been created for {member.mention}!")
 
 async def setup(bot):
-    await bot.add_cog(OfficeChannels(bot))
+    await bot.add_cog(OfficeManagement(bot))

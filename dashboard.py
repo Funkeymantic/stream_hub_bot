@@ -1,6 +1,7 @@
 from flask import Flask, render_template, jsonify
 from flask_socketio import SocketIO
 import os
+from requests import request
 
 app = Flask(__name__)
 socketio = SocketIO(app, cors_allowed_origins="*")
@@ -15,3 +16,7 @@ def status():
 
 if __name__ == "__main__":
     socketio.run(app, host="0.0.0.0", port=5000)
+
+@app.before_request
+def log_request():
+    print(f"Incoming request: {request.method} {request.url}")
