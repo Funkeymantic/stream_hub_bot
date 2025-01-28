@@ -10,3 +10,4 @@ google-api-python-client
 tweepy
 twitchio
 pynacl
+spotipy

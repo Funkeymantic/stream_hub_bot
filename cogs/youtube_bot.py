@@ -6,6 +6,8 @@ class YouTubeBot(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
         self.api_key = os.getenv("YOUTUBE_API_KEY")
+        if not self.api_key:
+            print("❌ YOUTUBE_API_KEY not found in environment variables!")
 
     @commands.command(name="yt_latest")
     async def youtube_latest(self, ctx, channel_id: str):

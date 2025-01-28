@@ -1,7 +1,25 @@
 import os
-import json
-import asyncio
-from bot_core import run_bot
+from dotenv import load_dotenv
+from bot_core import BotCore
+import discord
+
+# Load environment variables from .env
+load_dotenv()
+
+# Load sensitive credentials from environment variables
+DISCORD_TOKEN = os.getenv("DISCORD_TOKEN")
+
+# Bot setup
+intents = discord.Intents.default()
+intents.message_content = True
+bot = BotCore(command_prefix="~", intents=intents)
+
+# Run the bot
+if DISCORD_TOKEN:
+    bot.run(DISCORD_TOKEN)
+else:
+    print("❌ DISCORD_TOKEN not found in environment variables!")
+
 
 async def main():
     config_files = [f for f in os.listdir('configs') if f.endswith('.json')]
