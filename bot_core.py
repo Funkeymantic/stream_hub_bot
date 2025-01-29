@@ -1,5 +1,6 @@
 import os
 import json
+from discord.ext import commands
 
 
 class BotCore(commands.Bot):
