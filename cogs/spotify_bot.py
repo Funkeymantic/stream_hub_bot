@@ -7,18 +7,20 @@ import os
 import asyncio
 from urllib.parse import urlparse
 
-
 def extract_spotify_id(spotify_url, content_type="track"):
-    """Extracts the Spotify ID from a track or playlist URL."""
+    """Extracts the Spotify track ID from a URL and removes unnecessary parameters."""
     if "open.spotify.com" not in spotify_url:
-        return spotify_url.strip()  # Assume it's already a raw ID
+        return spotify_url.split("?")[0].strip()  # If it's already an ID, just clean it
 
     parsed_url = urlparse(spotify_url)
     path_parts = parsed_url.path.split("/")
+
+    # Validate that the URL is a proper Spotify link
     if len(path_parts) > 2 and path_parts[1] == content_type:
-        return path_parts[2]  # Extract the ID from the URL
+        track_id = path_parts[2].split("?")[0]  # Remove everything after '?'
+        return track_id
     else:
-        raise ValueError(f"Invalid Spotify {content_type} URL.")
+        raise ValueError(f"❌ Invalid Spotify {content_type} URL.")
 
 
 class SpotifyCog(commands.Cog):
@@ -49,39 +51,46 @@ class SpotifyCog(commands.Cog):
         return False
 
     @commands.command(name="addsong")
-    async def add_song(self, ctx, *, song_url: str):
-        """Adds a song to the collaborative playlist."""
-        guild_id = ctx.guild.id
-        config = self.get_server_config(guild_id)
+async def add_song(self, ctx, *, song_url: str):
+    """Adds a song to the collaborative playlist."""
+    guild_id = ctx.guild.id
+    config = self.get_server_config(guild_id)
 
-        if not config:
-            return await ctx.send("❌ No configuration found for this server.")
+    if not config:
+        return await ctx.send("❌ No configuration found for this server.")
 
-        playlist_id = config.get("spotify", {}).get("playlist_id")
-        ban_role_id = config.get("spotify", {}).get("ban_role_id")
+    playlist_id = config.get("spotify", {}).get("playlist_id")
+    ban_role_id = config.get("spotify", {}).get("ban_role_id")
 
-        if not playlist_id:
-            return await ctx.send("❌ No playlist configured for this server.")
+    if not playlist_id:
+        return await ctx.send("❌ No playlist configured for this server.")
 
-        # Check if user is banned
-        banned_role = ctx.guild.get_role(ban_role_id)
-        if banned_role and banned_role in ctx.author.roles:
-            return await ctx.send("🚫 You are banned from adding songs.")
+    # Check if user is banned
+    banned_role = ctx.guild.get_role(ban_role_id)
+    if banned_role and banned_role in ctx.author.roles:
+        return await ctx.send("🚫 You are banned from adding songs.")
 
-        try:
-            track_id = extract_spotify_id(song_url, content_type="track")  # FIXED FUNCTION
-            track = self.spotify.track(track_id)  # Fetch track details
-        except ValueError:
-            return await ctx.send("❌ Invalid Spotify track URL or ID.")
-        except SpotifyException as e:
-            return await ctx.send(f"❌ Spotify error: {e}")
+    try:
+        track_id = extract_spotify_id(song_url, content_type="track")
+        track = self.spotify.track(track_id)  # ✅ Fetch track details from Spotify API
+    except ValueError:
+        return await ctx.send("❌ Invalid Spotify track URL or ID.")
+    except SpotifyException as e:
+        return await ctx.send(f"❌ Spotify error: {e}")
 
-        # Add song to the playlist
-        try:
-            self.spotify.playlist_add_items(playlist_id, [track_id])
-            await ctx.send(f"✅ Added {track['name']} by {track['artists'][0]['name']} to the playlist!")
-        except SpotifyException as e:
-            await ctx.send(f"❌ Failed to add song: {e}")
+    # Debugging Output (Remove later)
+    print(f"🎵 Extracted Track ID: {track_id}")
+
+    # Verify if the track exists before adding
+    if not track:
+        return await ctx.send("❌ Could not find this track on Spotify.")
+
+    # Add song to the playlist
+    try:
+        self.spotify.playlist_add_items(playlist_id, [track_id])
+        await ctx.send(f"✅ Added **{track['name']}** by **{track['artists'][0]['name']}** to the playlist!")
+    except SpotifyException as e:
+        await ctx.send(f"❌ Failed to add song: {e}")
 
     async def handle_request_timeout(self, message, requester):
         """Handles a pending song request timing out after 1 day."""
