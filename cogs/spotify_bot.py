@@ -2,10 +2,11 @@ import discord
 from discord.ext import commands
 from spotipy import Spotify
 from spotipy.oauth2 import SpotifyOAuth
-from spotipy.exceptions import SpotifyException  # Fix: Correctly importing SpotifyException
+from spotipy.exceptions import SpotifyException
 import os
 import asyncio
 from urllib.parse import urlparse
+
 
 def extract_spotify_id(spotify_url, content_type="track"):
     """Extracts the Spotify track ID from a URL and removes unnecessary parameters."""
@@ -15,7 +16,6 @@ def extract_spotify_id(spotify_url, content_type="track"):
     parsed_url = urlparse(spotify_url)
     path_parts = parsed_url.path.split("/")
 
-    # Validate that the URL is a proper Spotify link
     if len(path_parts) > 2 and path_parts[1] == content_type:
         track_id = path_parts[2].split("?")[0]  # Remove everything after '?'
         return track_id
@@ -50,8 +50,20 @@ class SpotifyCog(commands.Cog):
                 return True
         return False
 
+    def search_song(self, query):
+        """Search for a song on Spotify and return the first result."""
+        results = self.spotify.search(q=query, type="track", limit=1)
+
+        if results["tracks"]["items"]:
+            track = results["tracks"]["items"][0]
+            track_id = track["id"]
+            track_name = track["name"]
+            artist_name = track["artists"][0]["name"]
+            return track_id, track_name, artist_name
+        return None, None, None
+
     @commands.command(name="addsong")
-    async def add_song(self, ctx, *, song_url: str):
+    async def add_song(self, ctx, *, song_query: str):
         """Adds a song to the collaborative playlist."""
         guild_id = ctx.guild.id
         config = self.get_server_config(guild_id)
@@ -71,15 +83,20 @@ class SpotifyCog(commands.Cog):
             return await ctx.send("🚫 You are banned from adding songs.")
 
         try:
-            track_id = extract_spotify_id(song_url, content_type="track")
-            track = self.spotify.track(track_id)  # ✅ Fetch track details from Spotify API
+            # Determine if input is a track URL or a song name
+            if "open.spotify.com" in song_query:
+                track_id = extract_spotify_id(song_query, content_type="track")
+                track = self.spotify.track(track_id)
+            else:
+                track_id, track_name, artist_name = self.search_song(song_query)
+                if not track_id:
+                    return await ctx.send("❌ No matching song found on Spotify.")
+                track = self.spotify.track(track_id)
+
         except ValueError:
             return await ctx.send("❌ Invalid Spotify track URL or ID.")
         except SpotifyException as e:
             return await ctx.send(f"❌ Spotify error: {e}")
-
-        # Debugging Output (Remove later)
-        print(f"🎵 Extracted Track ID: {track_id}")
 
         # Verify if the track exists before adding
         if not track:
