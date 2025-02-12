@@ -1,13 +1,21 @@
-discord.py
-asyncpg
-psycopg2-binary
-sqlalchemy
-aiosqlite
-flask
-flask-socketio
-eventlet
-google-api-python-client
-tweepy
-twitchio
-pynacl
-spotipy
+# Core bot dependencies
+discord.py==2.4.0
+asyncpg==0.30.0
+psycopg2-binary==2.9.10
+sqlalchemy==2.0.4
+aiosqlite==0.19.0
+
+# Web framework & socket communication
+flask==2.2.5
+flask-socketio==5.3.6
+eventlet==0.33.3
+
+# API Integrations
+google-api-python-client==2.101.0  # YouTube API
+tweepy==4.14.0  # Twitter API (Remove if not needed)
+twitchio==2.7.0  # Twitch API
+spotipy==2.23.0  # Spotify API
+
+# Voice Support for Discord
+pynacl==1.5.0
+python-dotenv==1.0.0  # Environment variable support

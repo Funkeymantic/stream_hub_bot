@@ -2,6 +2,7 @@ import os
 from dotenv import load_dotenv
 from bot_core import BotCore
 import discord
+import json
 
 # Load environment variables from .env
 load_dotenv()
@@ -34,4 +35,7 @@ async def main():
             await run_bot(config)
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    if DISCORD_TOKEN:
+        bot.run(DISCORD_TOKEN)
+    else:
+        print("❌ ERROR: DISCORD_TOKEN not found in environment variables!")
