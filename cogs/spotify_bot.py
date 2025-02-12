@@ -1,26 +1,10 @@
 import discord
-from discord.ext import commands
+from discord.ext import commands, tasks
 from spotipy import Spotify
 from spotipy.oauth2 import SpotifyOAuth
-from spotipy.exceptions import SpotifyException
 import os
+from utils.spotify_helpers import is_explicit
 import asyncio
-from urllib.parse import urlparse
-
-
-def extract_spotify_id(spotify_url, content_type="track"):
-    """Extracts the Spotify track ID from a URL and removes unnecessary parameters."""
-    if "open.spotify.com" not in spotify_url:
-        return spotify_url.split("?")[0].strip()  # If it's already an ID, just clean it
-
-    parsed_url = urlparse(spotify_url)
-    path_parts = parsed_url.path.split("/")
-
-    if len(path_parts) > 2 and path_parts[1] == content_type:
-        track_id = path_parts[2].split("?")[0]  # Remove everything after '?'
-        return track_id
-    else:
-        raise ValueError(f"❌ Invalid Spotify {content_type} URL.")
 
 class SpotifyCog(commands.Cog):
     """Spotify integration for collaborative playlist management."""
@@ -35,7 +19,7 @@ class SpotifyCog(commands.Cog):
                 scope="playlist-modify-public playlist-modify-private user-read-playback-state"
             )
         )
-        self.pending_requests = {}
+        self.pending_requests = {}  # Track pending song requests (keyed by message ID)
 
     def get_server_config(self, guild_id):
         """Retrieve the config for a specific server."""
@@ -59,16 +43,18 @@ class SpotifyCog(commands.Cog):
         if not config:
             return await ctx.send("❌ No configuration found for this server.")
 
+        # Fetch Spotify settings from the server config
         playlist_id = config.get("spotify", {}).get("playlist_id")
         ban_role_id = config.get("spotify", {}).get("ban_role_id")
+        mod_role_ids = config.get("spotify", {}).get("mod_role_ids", [])
 
         if not playlist_id:
             return await ctx.send("❌ No playlist configured for this server.")
 
-        # Check if user is banned
+        # Check if the user is banned
         banned_role = ctx.guild.get_role(ban_role_id)
         if banned_role and banned_role in ctx.author.roles:
-            return await ctx.send("🚫 You are banned from adding songs.")
+            return await ctx.send("🚫 You are banned from adding songs to the playlist.")
 
         # Search Spotify for the song
         results = self.spotify.search(q=search_query, type="track", limit=10)
@@ -128,9 +114,9 @@ class SpotifyCog(commands.Cog):
                     "mod_role_ids": mod_role_ids
                 }
 
-        # Verify if the track exists before adding
-        if not track:
-            return await ctx.send("❌ Could not find this track on Spotify.")
+                # Add reactions for mod approval
+                await message.add_reaction("✅")  # Approve
+                await message.add_reaction("❌")  # Reject
 
                 # Wait for mod approval or timeout
                 await self.handle_request_timeout(message, ctx.author)
@@ -157,32 +143,34 @@ class SpotifyCog(commands.Cog):
         try:
             await asyncio.sleep(86400)  # Wait for 24 hours
 
+            # If the request is still pending, notify and delete it
             if message.id in self.pending_requests:
-                del self.pending_requests[message.id]
+                del self.pending_requests[message.id]  # Remove from pending
                 await message.channel.send(f"⏳ The song request from {requester.mention} has expired.")
                 await requester.send("⚠️ Your song request has expired after 24 hours without moderator action.")
         except asyncio.CancelledError:
-            pass
+            pass  # Gracefully handle task cancellation
 
     @commands.Cog.listener()
     async def on_reaction_add(self, reaction, user):
         """Handles mod approval or rejection of explicit songs."""
         if user.bot:
-            return
+            return  # Ignore bot reactions
 
         message_id = reaction.message.id
         if message_id not in self.pending_requests:
-            return
+            return  # Ignore unrelated messages
 
         guild_id = reaction.message.guild.id
         config = self.get_server_config(guild_id)
         if not config:
             return
 
+        # Check if the user is a mod
         request = self.pending_requests[message_id]
         mod_role_ids = request["mod_role_ids"]
         if not await self.is_moderator(user, mod_role_ids):
-            return
+            return  # User is not a moderator
 
         # Handle approval or rejection
         track_uri = request["track_uri"]
@@ -193,10 +181,11 @@ class SpotifyCog(commands.Cog):
             self.spotify.playlist_add_items(playlist_id, [track_uri])
             await reaction.message.channel.send(f"✅ Approved by {user.mention}. Song added to the playlist!")
             await requester.send(f"🎶 Your song has been approved and added to the playlist!")
-        elif reaction.emoji == "❌":
+        elif reaction.emoji == "❌":  # Reject
             await reaction.message.channel.send(f"❌ Rejected by {user.mention}. Song was not added.")
             await requester.send(f"⚠️ Your song request was rejected by a moderator.")
 
+        # Remove the pending request
         del self.pending_requests[message_id]
 
 async def setup(bot):
