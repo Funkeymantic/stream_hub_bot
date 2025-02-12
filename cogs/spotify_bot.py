@@ -6,7 +6,6 @@ import os
 from utils.spotify_helpers import is_explicit
 import asyncio
 
-
 class SpotifyCog(commands.Cog):
     """Spotify integration for collaborative playlist management."""
 
@@ -34,9 +33,10 @@ class SpotifyCog(commands.Cog):
                 return True
         return False
 
-    @commands.command(name="addsong")
-    async def add_song(self, ctx, *, song_url: str):
-        """Adds a song to the collaborative playlist."""
+    @commands.command(name="addsong", help="Search for a song and add it to the playlist.")
+    async def add_song(self, ctx, *, search_query: str):
+        """Searches for a song by name and artist and adds it to the playlist."""
+
         guild_id = ctx.guild.id
         config = self.get_server_config(guild_id)
 
@@ -56,25 +56,59 @@ class SpotifyCog(commands.Cog):
         if banned_role and banned_role in ctx.author.roles:
             return await ctx.send("🚫 You are banned from adding songs to the playlist.")
 
-        # Get song details and check explicit content
-        track_id = song_url.split("/")[-1].split("?")[0]  # Extract track ID from URL
-        track = self.spotify.track(track_id)
-        if is_explicit(track):
+        # Search Spotify for the song
+        results = self.spotify.search(q=search_query, type="track", limit=10)
+
+        if not results["tracks"]["items"]:
+            return await ctx.send("⚠️ No matching song found on Spotify. Please provide the correct song name and artist.")
+
+        # Extract song details and filter for an exact match
+        best_match = None
+        for track in results["tracks"]["items"]:
+            track_name = track["name"]
+            track_artists = [artist["name"].lower() for artist in track["artists"]]
+            search_parts = search_query.lower().split()
+
+            # Ensure both song name and artist appear in search results
+            if all(part in track_name.lower() or part in " ".join(track_artists) for part in search_parts):
+                best_match = track
+                break
+
+        if not best_match:
+            return await ctx.send("⚠️ Couldn't find an exact match. Try refining your search.")
+
+        # Extract final song details
+        song_name = best_match["name"]
+        artist_name = ", ".join(artist["name"] for artist in best_match["artists"])
+        album_name = best_match["album"]["name"]
+        duration_ms = best_match["duration_ms"]
+        song_url = best_match["external_urls"]["spotify"]
+        album_cover = best_match["album"]["images"][0]["url"]
+        track_uri = best_match["uri"]
+
+        # Convert duration
+        minutes = duration_ms // 60000
+        seconds = (duration_ms % 60000) // 1000
+        duration = f"{minutes}:{seconds:02d}"
+
+        # Check if the song is explicit
+        if is_explicit(best_match):
             # Notify mods for approval if song is explicit
             mod_channel = discord.utils.get(ctx.guild.text_channels, name="mod-log")
             if mod_channel:
                 embed = discord.Embed(
                     title="⚠️ Explicit Song Request",
                     description=f"**User:** {ctx.author.mention}\n"
-                                f"**Track:** {track['name']} by {track['artists'][0]['name']}\n"
-                                f"[Open in Spotify]({track['external_urls']['spotify']})",
+                                f"**Track:** {song_name} by {artist_name}\n"
+                                f"[Open in Spotify]({song_url})",
                     color=discord.Color.orange()
                 )
-                embed.set_footer(text=f"Track ID: {track_id}")
+                embed.set_footer(text=f"Track URI: {track_uri}")
+                embed.set_thumbnail(url=album_cover)
 
                 message = await mod_channel.send(embed=embed)
                 self.pending_requests[message.id] = {
-                    "track_id": track_id,
+                    "track_uri": track_uri,
                     "user": ctx.author,
                     "playlist_id": playlist_id,
                     "mod_role_ids": mod_role_ids
@@ -90,14 +124,24 @@ class SpotifyCog(commands.Cog):
             return await ctx.send("⚠️ This song is explicit and is pending mod approval.")
 
         # Add song to playlist
-        self.spotify.playlist_add_items(playlist_id, [track_id])
-        await ctx.send(f"✅ Song added: {track['name']} by {track['artists'][0]['name']}")
+        self.spotify.playlist_add_items(playlist_id, [track_uri])
+
+        # Send confirmation message
+        embed = discord.Embed(
+            title=f"✅ Added to Playlist: {song_name}",
+            url=song_url,
+            description=f"🎤 **Artist**: {artist_name}\n🎵 **Album**: {album_name}\n⏱ **Duration**: {duration}",
+            color=discord.Color.green()
+        )
+        embed.set_thumbnail(url=album_cover)
+        embed.set_footer(text="Added to your playlist successfully!")
+
+        await ctx.send(embed=embed)
 
     async def handle_request_timeout(self, message, requester):
         """Handles a pending song request timing out after 1 day."""
         try:
-            # Wait for 24 hours (1 day)
-            await asyncio.sleep(86400)
+            await asyncio.sleep(86400)  # Wait for 24 hours
 
             # If the request is still pending, notify and delete it
             if message.id in self.pending_requests:
@@ -129,12 +173,12 @@ class SpotifyCog(commands.Cog):
             return  # User is not a moderator
 
         # Handle approval or rejection
-        track_id = request["track_id"]
+        track_uri = request["track_uri"]
         playlist_id = request["playlist_id"]
         requester = request["user"]
 
         if reaction.emoji == "✅":  # Approve
-            self.spotify.playlist_add_items(playlist_id, [track_id])
+            self.spotify.playlist_add_items(playlist_id, [track_uri])
             await reaction.message.channel.send(f"✅ Approved by {user.mention}. Song added to the playlist!")
             await requester.send(f"🎶 Your song has been approved and added to the playlist!")
         elif reaction.emoji == "❌":  # Reject
@@ -143,7 +187,6 @@ class SpotifyCog(commands.Cog):
 
         # Remove the pending request
         del self.pending_requests[message_id]
-
 
 async def setup(bot):
     await bot.add_cog(SpotifyCog(bot))
