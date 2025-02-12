@@ -1,5 +1,6 @@
 import discord
 from discord.ext import commands
+import re
 
 class EventLogger(commands.Cog):
     """Logs server events to designated channels."""
@@ -32,9 +33,23 @@ class EventLogger(commands.Cog):
 
     @commands.Cog.listener()
     async def on_message_edit(self, before, after):
-        """Logs edited messages."""
+        """Logs edited messages but ignores embedded updates and GIF changes."""
+
         if before.guild is None or before.author.bot:
             return  # Ignore DMs or bot messages
+
+        # Ignore cases where the content hasn't changed
+        if before.content == after.content:
+            return  # Avoid logging if no real change occurred
+
+        # Check if the edit only modified an embedded preview
+        if not before.content and after.content:
+            return  # Ignore Discord link previews
+
+        # Ignore GIF link edits (Tenor, Giphy, etc.)
+        gif_regex = r"(https?:\/\/(tenor\.com|giphy\.com|media\.giphy\.com|cdn\.discordapp\.com).*\.(gif|mp4))"
+        if re.match(gif_regex, before.content or "") and re.match(gif_regex, after.content or ""):
+            return  # Ignore GIF changes
 
         # Get the config for this guild
         guild_id = before.guild.id
@@ -107,7 +122,6 @@ class EventLogger(commands.Cog):
 
         if log_channel:
             await log_channel.send(f"⚠️ **Member Kicked:** {user.name}#{user.discriminator}")
-
 
 async def setup(bot):
     await bot.add_cog(EventLogger(bot))
