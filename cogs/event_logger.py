@@ -65,7 +65,7 @@ class EventLogger(commands.Cog):
 
         if log_channel:
             await log_channel.send(
-                f"✏️ **Message Edited** in {before.channel.mention}:\n"
+                f"✏️ **Message Edited** in {before.channel.mention} by {member.name}:\n"
                 f"**Before:** {before.content}\n"
                 f"**After:** {after.content}"
             )
