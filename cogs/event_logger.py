@@ -32,7 +32,7 @@ class EventLogger(commands.Cog):
             )
 
     @commands.Cog.listener()
-    async def on_message_edit(self, before, after):
+    async def on_message_edit(self, member, before, after):
         """Logs edited messages but ignores embedded updates and GIF changes."""
 
         if before.guild is None or before.author.bot:
