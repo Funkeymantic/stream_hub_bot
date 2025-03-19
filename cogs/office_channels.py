@@ -32,7 +32,7 @@ class OfficeManagement(commands.Cog):
         await member.add_roles(office_role)
         
         # Set channel permissions using role and channel IDs
-        await voice_channel.set_permissions(member, overwrite=discord.PermissionOverwrite(manage_channels=True, view_channel=True, connect=True, speak=True))
+        await voice_channel.set_permissions(member, overwrite=discord.PermissionOverwrite(manage_channels=True, view_channel=True, connect=True, speak=True, USE_VAD=True))
         await voice_channel.set_permissions(guild.default_role, overwrite=discord.PermissionOverwrite(view_channel=False, connect=False))
 
         mod_role_id = self.bot.config['office_channels']['mod_role_id']
