@@ -13,7 +13,7 @@ DISCORD_TOKEN = os.getenv("DISCORD_TOKEN")
 # Bot setup
 intents = discord.Intents.default()
 intents.message_content = True
-bot = BotCore(command_prefix="~", intents=intents)
+bot = BotCore(command_prefix="!", intents=intents)
 
 # Run the bot
 if DISCORD_TOKEN:
